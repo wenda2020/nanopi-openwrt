@@ -1,9 +1,11 @@
 name: r2s Lean版openwrt 
 
-#on:
+on:
   push:
     branches: 
       - master
+    paths:
+      - '.github/workflows/r2s_lean.yml'
 
 env:
   SSH_ACTIONS: true
