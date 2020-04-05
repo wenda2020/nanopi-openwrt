@@ -46,6 +46,31 @@ jobs:
           repo sync -c --no-tags --no-clone-bundle -j8
           cd friendlywrt/ && git fetch --unshallow
 
+      - name: Install Luci for Clash
+        run: |
+          cd friendlywrt-rk3328/friendlywrt/package
+          git clone https://github.com/frainzy1477/luci-app-clash
+      - name: Install OpenClash
+        run: |
+          git clone https://github.com/vernesong/OpenClash.git tmp
+          mv tmp/luci-app-openclash friendlywrt-rk3328/friendlywrt/package
+          rm -rf tmp
+      - name: Install Clash Binaries
+        run: |
+          mkdir -p friendlywrt-rk3328/friendlywrt/package/base-files/files/etc/clash
+          cd friendlywrt-rk3328/friendlywrt/package/base-files/files/etc/clash
+          wget https://github.com/Dreamacro/clash/releases/download/v0.19.0/clash-linux-armv8-v0.19.0.gz
+          gunzip clash-linux-armv8-v0.19.0.gz
+          chmod +x clash-linux-armv8-v0.19.0
+          mv clash-linux-armv8-v0.19.0 clash
+          mkdir ../openclash
+          cp clash ../openclash/
+      - name: Set Clash Version
+        run: |
+          mkdir -p friendlywrt-rk3328/friendlywrt/package/base-files/files/usr/share/clash
+          cd friendlywrt-rk3328/friendlywrt/package/base-files/files/usr/share/clash
+          echo 0.18.0 > core_version
+          
       - name: Patch Kernel
         run: |
           . patch_kernel_5.4.sh
@@ -102,33 +127,16 @@ jobs:
         run: |
           gzip friendlywrt-rk3328/out/*.img
       - name: Assemble Artifact
-        id: assemble_artifact
         run: |
           rm -rf ./artifact/
           mkdir -p ./artifact/
-          mv friendlywrt-rk3328/out/*img* ./artifact/
+          find friendlywrt-rk3328/out/ -name "FriendlyWrt_*img*" | xargs -I{} sh -c 'f=$(basename $1); zip -r -j "./artifact/${f}.zip" $1' sh {} \;
+          find friendlywrt-rk3328/friendlywrt/bin/targets/rockchip-rk3328/generic -name "openwrt*-squashfs.img" | xargs -I{} sh -c 'f=$(basename $1); zip -r -j "./artifact/${f}.zip" $1' sh {} \;
+          
           cp friendlywrt-rk3328/friendlywrt/.config ./artifact/
-          zip -r artifact.zip ./artifact/
-          release_tag="R2S-Lean-$(date +%Y-%m-%d)"
-          echo "##[set-output name=release_tag;]$release_tag"
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.sec_token }}
+          cp friendlywrt-rk3328/out/config.lite ./artifact/
+      - name: Upload Artifact
+        uses: actions/upload-artifact@master
         with:
-          tag_name: ${{ steps.assemble_artifact.outputs.release_tag }}
-          release_name: 自动发布 ${{ steps.assemble_artifact.outputs.release_tag }}
-          draft: false
-          prerelease: false
-      - name: Upload Release Asset
-        id: upload-release-asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.sec_token }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
-          asset_path: ./artifact.zip
-          asset_name: ${{ steps.assemble_artifact.outputs.release_tag }}-ROM.zip
-          asset_content_type: application/zip
-
+          name: FriendlyWrt_NanoPi-R2S RK3328 v19.07
+          path: ./artifact/
